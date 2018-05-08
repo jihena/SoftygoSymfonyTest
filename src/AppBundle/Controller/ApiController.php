@@ -2,115 +2,163 @@
 
 namespace AppBundle\Controller;
 
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
-
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
-
-use Symfony\Component\HttpFoundation\Response;
+use FOS\RestBundle\Controller\Annotations as Rest;
+use FOS\RestBundle\Controller\FOSRestController;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use FOS\RestBundle\View\View;
 
 use AppBundle\Entity\Post;
 
-Class ApiController extends Controller {
+Class ApiController extends FOSRestController {
 
     /**
-     * @Route("/posts/{id}", name="post_show")
-     * @Method({"GET"})
+     * @Rest\Get("/post")
      */
-    public function showPost(Post $post) {
-
-        $data = $this -> get('jms_serializer') -> serialize($post, 'json');
-
-        $response = new Response($data);
-        $response -> headers -> set('Content-Type', 'application/json');
-        $response -> headers -> set('Access-Control-Allow-Origin', '*');
-
-        return $response;
-
+    public function getPostsAction()
+    {
+        $restresult = $this->getDoctrine()->getRepository('AppBundle:Post')->findAll();
+        if ($restresult === null) {
+            $response = array(
+              'status' => 'NOk',
+              'message' => 'There are no posts exist'
+            );
+            return $response;
+        }
+        return $restresult;
     }
 
     /**
-     * @Route("/posts", name="post_list")
-     * @Method({"GET"})
+     * @Rest\Get("/post/{id}")
      */
-    public function listPost() {
-
-        $posts = $this -> getDoctrine() -> getRepository('AppBundle:Post') -> findAll();
-
-        $data = $this -> get('jms_serializer') -> serialize($posts, 'json');
-
-        $response = new Response($data);
-        $response -> headers -> set('Content-Type', 'application/json');
-        $response -> headers -> set('Access-Control-Allow-Origin', '*');
-
-        return $response;
-
+    public function getPostByIdAction($id)
+    {
+        $singleresult = $this->getDoctrine()->getRepository('AppBundle:Post')->find($id);
+        if ($singleresult === null) {
+            $response = array(
+              'status' => 'NOk',
+              'message' => 'Post not found'
+            );
+            return $response;
+        }
+        return $singleresult;
     }
 
     /**
-     * @Route("/posts/create", name="post_create")
-     * @Method({"POST"})
+     * @Rest\Post("/post")
      */
-    public function createPost(Request $request) {
+    public function addPostAction(Request $request)
+    {
+        $data = new Post();
+        $title = $request->get('title');
+        $description = $request->get('description');
 
-        $data = $request -> getContent();
-        $post = $this -> get('jms_serializer') -> deserialize($data, 'AppBundle\Entity\Post', 'json');
+        if(empty($title) || empty($description))
+        {
+            $response = array(
+              'status' => 'NOk',
+              'message' => 'Null values are not allowed'
+            );
+            return $response;
+        }
 
-        $em = $this -> getDoctrine() -> getManager();
-        $em -> persist($post);
-        $em -> flush();
+        $data->setTitle($title);
+        $data->setDescription($description);
 
-        return new Response('', Response::HTTP_CREATED);
+        $em = $this->getDoctrine()->getManager();
+        $em->persist($data);
+        $em->flush();
 
+        $response = array(
+          'status' => 'Ok',
+          'message' => 'Post Added Successfully'
+        );
+        return $response;
     }
 
     /**
-     * @Route("/posts/update/{id}", name="post_update")
-     * @Method({"PUT"})
+     * @Rest\Put("/post/{id}")
      */
-    public function updatePost(Request $request, Post $post) {
+    public function updatePostAction($id,Request $request)
+    {
+        $data = new Post();
+        $title = $request->get('title');
+        $description = $request->get('description');
 
-        $data = $request -> getContent();
+        $sn = $this->getDoctrine()->getManager();
+        $post = $this->getDoctrine()->getRepository('AppBundle:Post')->find($id);
+        if (empty($post)) {
+            $response = array(
+              'status' => 'NOk',
+              'message' => 'Post not found'
+            );
+            return $response;
+        }
+        elseif(!empty($title) && !empty($description)){
+            $post->setTitle($title);
+            $post->setDescription($description);
+            $sn->flush();
 
-        $newpost = $this -> get('jms_serializer') -> deserialize($data, 'AppBundle\Entity\Post', 'json');
+            $response = array(
+              'status' => 'Ok',
+              'message' => 'Post Updated Successfully'
+            );
+            return $response;
+        }
+        elseif(empty($title) && !empty($description)){
+           $post->setDescription($description);
+           $sn->flush();
 
-        $post -> setTitle($newpost -> getTitle());
-        $post -> setDescription($newpost -> getDescription());
+           $response = array(
+             'status' => 'Ok',
+             'message' => 'Description Updated Successfully'
+           );
+           return $response;
+        }
+        elseif(!empty($title) && empty($description)){
+          $post->setTitle($title);
+          $sn->flush();
 
-        $em = $this -> getDoctrine() -> getManager();
-        $em -> persist($post);
-        $em -> flush();
-
-        // return new Response('', Response::HTTP_CREATED);
-
-        $data = $this -> get('jms_serializer') -> serialize($post, 'json');
-
-        $response = new Response($data);
-        $response -> headers -> set('Content-Type', 'application/json');
-        $response -> headers -> set('Access-Control-Allow-Origin', '*');
-
-        return $response;
-
+          $response = array(
+           'status' => 'Ok',
+           'message' => 'Title Updated Successfully'
+          );
+          return $response;
+        }
+        else {
+          $response = array(
+           'status' => 'Ok',
+           'message' => 'Post title or description cannot be empty'
+          );
+          return $response;
+        }
     }
 
     /**
-     * @Route("/posts/delete/{id}", name="post_delete")
-     * @Method({"DELETE"})
+     * @Rest\Delete("/post/{id}")
      */
-    public function deletePost(Post $post) {
-
-        $em = $this -> getDoctrine() -> getManager();
-        $em -> remove($post);
-        $em -> flush();
-
-        // return new Response('', Response::HTTP_CREATED);
-        $response = new Response();
-        $response -> headers -> set('Content-Type', 'application/json');
-        $response -> headers -> set('Access-Control-Allow-Origin', '*');
+    public function deletePostAction($id)
+    {
+        $data = new Post();
+        $sn = $this->getDoctrine()->getManager();
+        $post = $this->getDoctrine()->getRepository('AppBundle:Post')->find($id);
+        if (empty($post)) {
+            $response = array(
+              'status' => 'NOk',
+              'message' => 'Post not found'
+            );
+            return $response;
+        }
+        else {
+            $sn->remove($post);
+            $sn->flush();
+            $response = array(
+              'status' => 'Ok',
+              'message' => 'Post deleted successfully'
+            );
+        }
 
         return $response;
-
     }
 
 
